@@ -85,6 +85,18 @@ def get_tokens(username):
     return tokens
 
 
+def set_username_tokens(username, tokens):
+
+    users.update_one(
+        {"Username": username},
+        {
+            "$set": {
+                "tokens": tokens
+                }
+        } 
+    )
+
+
 class Register(Resource):
     def post(self):
         status_code, message, username, password = get_data()
@@ -145,12 +157,21 @@ class Detect(Resource):
         
         tokens = get_tokens(username)
 
+        if tokens < 1:
+            return jsonify(
+                {
+                    'Status Code': 303,
+                    'Message': "You dont have enouth tokens",
+                }
+            )
+
+        set_username_tokens(username, tokens - 1)
 
         return jsonify(
             {
                 'Status Code': status_code,
                 'Message': message,
-                'Tokens': tokens
+                'Tokens': tokens - 1
             }
         )
 
