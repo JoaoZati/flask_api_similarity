@@ -16,11 +16,13 @@ import spacy
 import en_core_web_sm
 
 app = Flask(__name__)
+app.config.from_object('config.DevelopmentConfig')
 api = Api(app)
 
-client = MongoClient("mongodb://db:27017")  # same name in docker compose
+client = MongoClient(app.config['DATABASE'])  # same name in docker compose
 db = client.SentenceDatabase
 users = db["Users"]
+admin = db["Admin"]
 
 
 @app.route('/')
@@ -28,7 +30,15 @@ def hello_word():
     return 'Hello Word'
 
 
-def get_data(data=False):
+def set_admin_in_db():
+    try:
+        if admin.find({"Admin": app.config['ADMIN_USERNAME']})[0]['Admin']:
+            pass
+    except Exception as e:
+        print(e)
+
+
+def get_data(data=False, admin=False):
     status_code = 200
     message = "Ok"
 
@@ -41,22 +51,27 @@ def get_data(data=False):
         if data:
             text_1 = post_data["text_1"]
             text_2 = post_data["text_2"]
+        if admin:
+            admin_username = post_data["admin_username"]
+            admin_password = post_data["admin_password"]
     except Exception as e:
         status_code = 305
         message = str(e)
-        username, password = [0] * 2
+        username, password, admin_password, admin_username = [0] * 4
         text_1, text_2 = [''] * 2
 
     list_return = [status_code, message, username, password]
     if data:
         list_return.extend([text_1, text_2])
-            
+    if admin:
+        list_return.extend([admin_username, admin_password])
+
     return list_return
 
 
 def user_already_exist(username):
     try:
-        if users.find({}, {"Username": username})[0]['Username'] == username:
+        if users.find({"Username": username})[0]['Username'] == username:
             return True
     except Exception as e:
         print(e)
@@ -66,9 +81,9 @@ def user_already_exist(username):
 
 def valid_user_and_passoword(username, password):
     try:
-        if not users.find({}, {"Username": username})[0]['Username']:
+        if not users.find({"Username": username})[0]['Username']:
             return False
-        hash_password = str(users.find({}, {"Username": username, "Password": 1})[0]["Password"])
+        hash_password = str(users.find({"Username": username})[0]["Password"])
         if bcrypt.hashpw(password, hash_password) == hash_password:
             return True
     except Exception as e:
@@ -79,7 +94,7 @@ def valid_user_and_passoword(username, password):
 
 def get_tokens(username):
     try:
-        tokens = int(users.find({}, {"Username": username, "Tokens": 1})[0]["Tokens"])
+        tokens = int(users.find({"Username": username})[0]["Tokens"])
     except Exception as e:
         print(e)
         tokens = 0
@@ -195,10 +210,41 @@ class Detect(Resource):
         )
 
 
+class Refil(Resource):
+    def post(self):
+        status_code, message, username, password, \
+        admin_username, admin_password = get_data(admin=True)
+
+        if status_code != 200:
+            return jsonify(
+                {
+                    'Status Code': status_code,
+                    'Message': message,
+                }
+            )
+
+        tokens = 0
+        ratio = 0
+
+        return jsonify(
+            {
+                'Status Code': status_code,
+                'Message': message,
+                'Tokens': tokens - 1,
+                "Similarity Ratio": ratio
+            }
+        )
+
+
 api.add_resource(Register, "/register")
 api.add_resource(Detect, "/detect")
+api.add_resource(Refil, "/refil")
 
 if __name__ == '__main__':
     initialize_debugger()
 
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(
+        host = app.config['HOST'],
+        port = app.config['PORT'], 
+        debug= app.config['DEBUG']
+        )
