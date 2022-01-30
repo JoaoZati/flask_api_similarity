@@ -26,7 +26,7 @@ def hello_word():
     return 'Hello Word'
 
 
-def get_data():
+def get_data(data=False):
     status_code = 200
     message = "Ok"
 
@@ -35,12 +35,21 @@ def get_data():
 
         username = post_data["username"]
         password = post_data["password"]
+
+        if data:
+            text_1 = post_data["Text_1"]
+            text_2 = post_data["Text_2"]
     except Exception as e:
         status_code = 305
         message = str(e)
-        username, password = [0]*2
-    
-    return status_code, message, username, password
+        username, password = [0] * 2
+        text_1, text_2 = [''] * 2
+
+    list_return = [status_code, message, username, password]
+    if data:
+        list_return.extend([text_1, text_2])
+            
+    return list_return
 
 
 def user_already_exist(username):
@@ -92,7 +101,7 @@ class Register(Resource):
 
 class Detect(Resource):
     def post(self):
-        status_code, message = 200, "0k"
+        status_code, message, username, password, text_1, text_2 = get_data(data=True) 
 
         return jsonify(
             {
