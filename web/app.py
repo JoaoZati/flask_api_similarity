@@ -90,7 +90,20 @@ class Register(Resource):
         )
 
 
+class Detect(Resource):
+    def post(self):
+        status_code, message = 200, "0k"
+
+        return jsonify(
+            {
+                'Status Code': status_code,
+                'Message': message,
+            }
+        )
+
+
 api.add_resource(Register, "/register")
+api.add_resource(Detect, "/detect")
 
 if __name__ == '__main__':
     initialize_debugger()
