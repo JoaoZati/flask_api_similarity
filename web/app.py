@@ -37,8 +37,8 @@ def get_data(data=False):
         password = post_data["password"]
 
         if data:
-            text_1 = post_data["Text_1"]
-            text_2 = post_data["Text_2"]
+            text_1 = post_data["text_1"]
+            text_2 = post_data["text_2"]
     except Exception as e:
         status_code = 305
         message = str(e)
@@ -60,6 +60,30 @@ def user_already_exist(username):
         print(e)
     
     return False
+
+
+def valid_user_and_passoword(username, password):
+    try:
+        if not users.find({}, {"Username": username})[0]['Username']:
+            return False
+        hash_password = str(users.find({}, {"Username": username, "Password": 1})[0]["Password"])
+        if bcrypt.hashpw(password, hash_password) == hash_password:
+            return True
+    except Exception as e:
+        print(e)
+    
+    return False
+
+
+def get_tokens(username):
+    try:
+        tokens = int(users.find({}, {"Username": username, "Tokens": 1})[0]["Tokens"])
+    except Exception as e:
+        print(e)
+        tokens = 0
+    
+    return tokens
+
 
 class Register(Resource):
     def post(self):
@@ -101,12 +125,32 @@ class Register(Resource):
 
 class Detect(Resource):
     def post(self):
-        status_code, message, username, password, text_1, text_2 = get_data(data=True) 
+        status_code, message, username, password, text_1, text_2 = get_data(data=True)
+
+        if status_code != 200:
+            return jsonify(
+                {
+                    'Status Code': status_code,
+                    'Message': message,
+                }
+            )
+        
+        if not valid_user_and_passoword(username, password):
+            return jsonify(
+                {
+                    'Status Code': 302,
+                    'Message': "Invalid Username or Password",
+                }
+            )
+        
+        tokens = get_tokens(username)
+
 
         return jsonify(
             {
                 'Status Code': status_code,
                 'Message': message,
+                'Tokens': tokens
             }
         )
 
