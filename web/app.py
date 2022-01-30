@@ -12,6 +12,8 @@ from pymongo import MongoClient
 from debugger import initialize_debugger
 
 import bcrypt
+import spacy
+import en_core_web_sm
 
 app = Flask(__name__)
 api = Api(app)
@@ -91,7 +93,7 @@ def set_username_tokens(username, tokens):
         {"Username": username},
         {
             "$set": {
-                "tokens": tokens
+                "Tokens": tokens
                 }
         } 
     )
@@ -165,13 +167,30 @@ class Detect(Resource):
                 }
             )
 
-        set_username_tokens(username, tokens - 1)
+        try:
+            nlp = en_core_web_sm.load()
+
+            text_1 = nlp(text_1)
+            text_2 = nlp(text_2)
+
+            ratio = text_1.similarity(text_2) # Ratio 0 to 1, more close to 1 more similar;
+
+            set_username_tokens(username, tokens - 1)
+        except Exception as e:
+            print(e)
+            return jsonify(
+                {
+                    'Status Code': 305,
+                    'Message': "Sorry one internal error ocurred",
+                }
+            )
 
         return jsonify(
             {
                 'Status Code': status_code,
                 'Message': message,
-                'Tokens': tokens - 1
+                'Tokens': tokens - 1,
+                "Similarity Ratio": ratio
             }
         )
 
