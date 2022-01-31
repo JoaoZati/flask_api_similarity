@@ -32,13 +32,25 @@ def hello_word():
 
 def set_admin_in_db():
     try:
-        if admin.find({"Admin": app.config['ADMIN_USERNAME']})[0]['Admin']:
-            pass
+        admin_username = app.config['ADMIN_USERNAME']
+        password = app.config['ADMIN_PASSWORD']
+        if admin.find({"Admin": admin_username})[0]['Admin']:
+            print('Admin is already set')
+            hash_password = str(admin.find({"Admin": admin_username})[0]["Password"])
+            if not bcrypt.hashpw(password, hash_password) == hash_password:
+                print('Admin Password is diferent from config!')
     except Exception as e:
-        print(e)
+        hashed_password = bcrypt.hashpw(app.config['ADMIN_PASSWORD'], bcrypt.gensalt())
+        admin.insert_one(
+            {
+                "Admin": app.config['ADMIN_USERNAME'],
+                "Password": hashed_password
+            }
+        )
+        print('Set Admin sucessfully!')
 
 
-def get_data(data=False, admin=False):
+def get_data(data=False):
     status_code = 200
     message = "Ok"
 
@@ -51,22 +63,36 @@ def get_data(data=False, admin=False):
         if data:
             text_1 = post_data["text_1"]
             text_2 = post_data["text_2"]
-        if admin:
-            admin_username = post_data["admin_username"]
-            admin_password = post_data["admin_password"]
     except Exception as e:
         status_code = 305
         message = str(e)
-        username, password, admin_password, admin_username = [0] * 4
+        username, password = [0] * 2
         text_1, text_2 = [''] * 2
 
     list_return = [status_code, message, username, password]
     if data:
         list_return.extend([text_1, text_2])
-    if admin:
-        list_return.extend([admin_username, admin_password])
 
     return list_return
+
+
+def get_data_admin():
+    status_code = 200
+    message = "Ok"
+
+    try:
+        post_data = request.get_json()
+
+        username = str(post_data["username"])
+        admin_username = str(post_data["admin_username"])
+        admin_password = str(post_data["admin_password"])
+        refil_tokens = int(post_data["refil_tokens"])
+    except Exception as e:
+        message = str(e)
+        status_code = 305
+        admin_password, admin_username, refil_tokens = [0]*3
+    
+    return status_code, message, username, admin_username, admin_password, refil_tokens
 
 
 def user_already_exist(username):
@@ -79,11 +105,29 @@ def user_already_exist(username):
     return False
 
 
+def valid_username(username):
+    try:
+        users.find({"Username": username})[0]['Username']
+        return True
+    except Exception as e:
+        print(e)
+    return False
+
+
 def valid_user_and_passoword(username, password):
     try:
-        if not users.find({"Username": username})[0]['Username']:
-            return False
         hash_password = str(users.find({"Username": username})[0]["Password"])
+        if bcrypt.hashpw(password, hash_password) == hash_password:
+            return True
+    except Exception as e:
+        print(e)
+    
+    return False
+
+
+def valid_admin_and_passoword(username, password):
+    try:
+        hash_password = str(admin.find({"Admin": username})[0]["Password"])
         if bcrypt.hashpw(password, hash_password) == hash_password:
             return True
     except Exception as e:
@@ -212,8 +256,8 @@ class Detect(Resource):
 
 class Refil(Resource):
     def post(self):
-        status_code, message, username, password, \
-        admin_username, admin_password = get_data(admin=True)
+        status_code, message, username, \
+        admin_username, admin_password, refil_tokens = get_data_admin()
 
         if status_code != 200:
             return jsonify(
@@ -223,15 +267,32 @@ class Refil(Resource):
                 }
             )
 
-        tokens = 0
-        ratio = 0
+        if not valid_username(username):
+            return jsonify(
+                {
+                    'Status Code': 302,
+                    'Message': 'Invalid username',
+                }
+            )
+
+        if not valid_admin_and_passoword(admin_username, admin_password):
+            return jsonify(
+                {
+                    'Status Code': 303,
+                    'Message': 'Invalid admin username or admin password',
+                }
+            )
+
+        tokens = get_tokens(username)
+        new_tokens = tokens + refil_tokens
+        set_username_tokens(username, new_tokens)
 
         return jsonify(
             {
                 'Status Code': status_code,
                 'Message': message,
-                'Tokens': tokens - 1,
-                "Similarity Ratio": ratio
+                'Old Tokens': tokens,
+                'New Total Tokens': new_tokens,
             }
         )
 
@@ -242,6 +303,8 @@ api.add_resource(Refil, "/refil")
 
 if __name__ == '__main__':
     initialize_debugger()
+
+    set_admin_in_db()
 
     app.run(
         host = app.config['HOST'],
